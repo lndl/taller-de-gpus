@@ -31,7 +31,7 @@ int main (int argc, char ** argv){
 	
 	timetick = dwalltime();
 	for (i = 2; i < limit; i++){
-		for (j = 0; j < CANTELEM; j++){
+		for (j = i + 1; j < CANTELEM; j++){
 			if (V[j] != 0){
 				if ((V[j] % i) == 0){
 					V[j] = 0;
@@ -40,11 +40,13 @@ int main (int argc, char ** argv){
 		}
 	}
 	printf("Criba completa = %f\n", dwalltime() - timetick);
-	for (i = 0; i < CANTELEM; i++){
+#ifdef PRINT
+        for (i = 0; i < CANTELEM; i++){
 		if (V[i] != 0){
-			//printf("%u es primo\n", V[i]);
+			printf("%u es primo\n", V[i]);
 		}
 	}
+#endif
 	return 0;
 }
 
