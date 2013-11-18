@@ -25,9 +25,10 @@ void MSE(int a[N][N], int b[N][N], const unsigned int n) {
     double total=0;
     for(i = 0; i < n; i++) {
         for (j = 0; j < n; j++){
-            total += ((a[i][j] - b[i][j])/n)*((a[i][j] - b[i][j])/n);
+            total += ((a[i][j] - b[i][j])*((a[i][j] - b[i][j])));
         }
     }
+	total/=n*n;
 	printf("total = %f\n", total);
 }
 
@@ -35,8 +36,8 @@ int main(){
 	int a[N][N];
 	int b[N][N];
 	initmatrixa(a, N);
-	initmatrixa(b, N);
-	b[0][0]=-22;
+	initmatrixb(b, N);
+	//b[0][0]=-22;
 	MSE(a,b,N);
 	return 0;
 }
