@@ -6,10 +6,8 @@
 // Tipo de los datos del algoritmo
 typedef int data_t;
 
-// Prototipos 
-data_t  add(const data_t a, const data_t b) { return a + b; }
-data_t  sub(const data_t a, const data_t b) { return a - b; }
-void    init_matrix(data_t *M, const unsigned int size, data_t(*init_op)(const data_t, const data_t), int orientation, int k);
+// Prototipos
+void    init_matrix(data_t *M, const unsigned int size, int orientation, int k);
 void    run_GPU(data_t* host_A, data_t* host_B, const unsigned int n_bytes, const unsigned int BLOCKS);
 void    print_matrix(data_t * const M, const unsigned int size);
 double  tick();
@@ -17,7 +15,7 @@ float   verificar(int n, int k1, int k2);
 void    calcular_dims(const unsigned int n, unsigned int* x_bloques, unsigned int* y_bloques, unsigned int* n_threads, int ismatrix); 
 
 __global__ void kernel_op_1(data_t * A, data_t * B);
-__global__ void kernel_op_2(data_t * M, const unsigned int size);
+__global__ void kernel_op_2(data_t * M, const unsigned int size, const unsigned int limit);
 
 // Host function
 int
@@ -43,8 +41,8 @@ main(int argc, char** argv)
 
   // ...Inicializa matrices
   t = tick();
-  init_matrix(host_A, N, &add, 0, k1);
-  init_matrix(host_B, N, &sub, 1, k2);
+  init_matrix(host_A, N, 0, k1);
+  init_matrix(host_B, N, 1, k2);
   t = tick() - t;
   printf("Inicializar matrices en mem. de CPU: %f\n", t);
 
@@ -118,7 +116,7 @@ run_GPU(data_t* host_A, data_t* host_B, const unsigned int N, const unsigned int
   kernel_op_1<<< dimGrid, dimBlock >>>(gpu_A, gpu_B);
   cudaThreadSynchronize();
   for (i=1; i<N*N; i*=2) {
-    kernel_op_2<<< dimGrid, dimBlock >>>(gpu_A, i);
+    kernel_op_2<<< dimGrid, dimBlock >>>(gpu_A, i, N*N);
     cudaThreadSynchronize();
   }
   t = tick() - t;
@@ -147,16 +145,17 @@ __global__ void kernel_op_1(data_t *A, data_t *B) {
   A[global_id] = (A[global_id] - B[global_id]) * (A[global_id] - B[global_id]);
 }
 
-__global__ void kernel_op_2(data_t *M, const unsigned int offset) {
+__global__ void kernel_op_2(data_t *M, const unsigned int offset, const unsigned int limit) {
   unsigned long int block_id =  blockIdx.y * gridDim.x + blockIdx.x;
   unsigned long int global_id = block_id * blockDim.x + threadIdx.x;
 
-  M[global_id] += M[global_id + offset]; 
+  if (global_id + offset <= limit)
+    M[global_id] += M[global_id + offset]; 
 }
 
 // Funcion para la inicializacion de las matrices
 void 
-init_matrix(data_t *M, const unsigned int size, data_t(*init_op)(const data_t, const data_t), int orientation, int k )
+init_matrix(data_t *M, const unsigned int size, int orientation, int k )
 {
   unsigned int i,j;
   for (i=0; i<size; i++) {
@@ -176,7 +175,7 @@ void print_matrix(data_t * const M, const unsigned int size) {
   int i,j;
   for (i = 0; i < size; i++) {
     for (j = 0; j < size; j++)
-        printf("%8d ", M[i*size+j]); 
+      printf("%8d ", M[i*size+j]); 
     printf("\n");
   }
 }
@@ -215,7 +214,7 @@ void calcular_dims(const unsigned int n, unsigned int* x_bloques,unsigned int* y
   if (*x_bloques > 65535) {
     printf("    \x1B[31mWARNING: Número de BLOQUES!! mayor al soportado por la placa!!\x1B[0m\n");
   }
-  printf("    \x1B[31mWARNING: Número de BLOQUESXX!! %d!!\x1B[0m\n", *x_bloques);
-  printf("    \x1B[31mWARNING: Número de BLOQUESYY!! %d!!\x1B[0m\n", *y_bloques);
+  //printf("    \x1B[31mWARNING: Número de BLOQUESXX!! %d!!\x1B[0m\n", *x_bloques);
+  //printf("    \x1B[31mWARNING: Número de BLOQUESYY!! %d!!\x1B[0m\n", *y_bloques);
 }
 
