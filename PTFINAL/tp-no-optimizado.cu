@@ -75,7 +75,7 @@ main(int argc, char** argv)
   printf("Liberacion de  mem. CPU: %f\n", t);
 
   // Verificacion de resultados
-  printf("\x1B[33mResultado final >>> %f\x1B[0m\n", resultado);
+  printf("\x1B[34mResultado final >>> %f\x1B[0m\n", resultado);
   if (resultado == (testigo = verificar (N, k1, k2)))
     printf("\x1B[32mVerificación >>> Valor esperado: %f | Valor obtenido: %f\x1B[0m\n", testigo, resultado);
   else
@@ -120,7 +120,7 @@ run_GPU(data_t* host_A, data_t* host_B, const unsigned int N, const unsigned int
     cudaThreadSynchronize();
   }
   t = tick() - t;
-  printf("    \x1B[33mEjecucion del kernel de GPU: %f\x1B[0m\n", t);
+  printf("    \x1B[34mEjecucion del kernel de GPU: %f\x1B[0m\n", t);
 
   // Recupera los resultados, guardandolos en el host
   t = tick();
@@ -199,6 +199,7 @@ void calcular_dims(const unsigned int n, unsigned int* x_bloques,unsigned int* y
   *x_bloques = ((N)/(*n_threads));
   if (*x_bloques == 0) {
     *x_bloques = 1;
+    printf("    \x1B[33mNOTICE: Reajustando x_bloques -> %d\x1B[0m\n", *x_bloques);
   }
   if (*n_threads > 1024) {
     printf("    \x1B[31mWARNING: Número de threads mayor al soportado por la placa!!\x1B[0m\n");
@@ -210,6 +211,8 @@ void calcular_dims(const unsigned int n, unsigned int* x_bloques,unsigned int* y
     for (i = 1; i < n; i *= 2);
     *y_bloques = i;
     *x_bloques /= *y_bloques;
+		printf("    \x1B[33mNOTICE: Reajustando x_bloques -> %d\x1B[0m\n", *x_bloques);
+		printf("    \x1B[33mNOTICE: Reajustando y_bloques -> %d\x1B[0m\n", *y_bloques);
   }
   if (*x_bloques > 65535) {
     printf("    \x1B[31mWARNING: Número de BLOQUES!! mayor al soportado por la placa!!\x1B[0m\n");

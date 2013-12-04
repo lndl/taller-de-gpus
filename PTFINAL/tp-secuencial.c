@@ -78,7 +78,7 @@ int main(int argc, char *argv[]){
 	t = tick() - t;
 	printf("Liberacion de  mem. CPU: %f\n", t);
 	
-	printf("\x1B[33mResultado final >>> %f\x1B[0m\n", resultado);
+	printf("\x1B[34mResultado final >>> %f\x1B[0m\n", resultado);
 	if (resultado == (testigo = verificar (N, k1, k2)))
 		printf("\x1B[32mVerificación >>> Valor esperado: %f | Valor obtenido: %f\x1B[0m\n", testigo, resultado);
 	else
