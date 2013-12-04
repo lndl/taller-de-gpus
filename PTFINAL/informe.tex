@@ -1,0 +1,156 @@
+\documentclass[a4paper,10pt]{article}
+\usepackage[utf8x]{inputenc}
+\usepackage[hmargin={2.5cm,3cm},vmargin=3cm]{geometry}
+\usepackage{ucs}
+\usepackage[spanish]{babel}
+\usepackage{url}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\lstdefinestyle{customc}{
+  belowcaptionskip=1\baselineskip,
+  breaklines=true,
+  %frame=L,
+  xleftmargin=\parindent,
+  language=C,
+  showstringspaces=false,
+  basicstyle=\ttfamily,
+  keywordstyle=\bfseries\color{green!40!black},
+  commentstyle=\itshape\color{purple!40!black},
+  identifierstyle=\color{blue},
+  stringstyle=\color{orange},
+}
+\lstdefinestyle{customasm}{
+  belowcaptionskip=1\baselineskip,
+  frame=L,
+  xleftmargin=\parindent,
+  language=[x86masm]Assembler,
+  basicstyle=\footnotesize\ttfamily,
+  commentstyle=\itshape\color{purple!40!black},
+}
+\lstset{escapechar=@,style=customc}
+%opening
+\title{Trabajo de Taller de programación de GPUs}
+\author{Lautaro De León - Joaquín Bogado}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+
+\end{abstract}
+
+\section{Introducción}
+El algoritmo MSE (Mean Square Error o Mean Squeare Difference) es un algoritmo de los más importantes en el mundo del álgebra lineal. Permite conocer la distancia euclidea entre dos matrices y se calcula mediante la formula 
+$$MSE (A, B) = \frac{1}{n²} \sum \sum (a_{ij} - b_{ij})² $$
+Donde $A$ y $B$ son matrices o vectores y donde $a_{ij}$ y $b_{ij}$ son cada uno de los elementos de ambas matrices.
+
+En tratamiento de imágenes, el MSE es una medida de similitud entre dos imágenes. Si el $MSE = 0$, entonces A y B son iguales. A medida que el MSE aumenta, las diferencias entre A y B serán mayores.
+\section{Versión secuencial}
+En la versión secuencial, se tratan las matrices como arreglos de longitud NxN. Por cada posición del arreglo se realiza la operacion $total = total + (a_i - b_i)²$. Al finalizar las sumas, se retorna $\frac{total}{N²}$.
+Aquí el código de la función que realiza esta tarea:
+\begin{lstlisting}[frame=single]
+double MSE(int *a, int *b, const unsigned int n) {
+    unsigned int i;
+    double total=0;
+    for(i = 0; i < n*n; i++) {
+        total += ((a[i] - b[i])*((a[i] - b[i])));
+    }
+    total/=n*n;
+    return total;
+}
+\end{lstlisting}
+
+El problema que puede tener este algoritmo es que el flotante $total$ haga overflow. Esto puede solucionarse dividiendo en cada paso de la suma por $i$, pero esto incrementaría el número y el costo de las operaciones. A modo de prueba, asumimos que esta condición no puede darse, es decir, la suma de los cuadrados de todos los elementos entra no es mayor que $MAX_DOUBLE$.
+
+
+\section{La versión para GPUs}
+Ambas versiones del algoritmo para GPUs dividen el problema en dos. Primero realizamos la suma de los elementos de las matrices $A$ y $B$. Luego se suman los elementos de la matriz $A$ en paralelo. La primera parte es identica tanto para la versión optimizada como para la no optimizada. Utilizamos un kernel con el siguiente código.
+
+\begin{lstlisting}[frame=single]
+__global__ void kernel_op_1(data_t *A, data_t *B) {
+  unsigned long int block_id = blockIdx.y * gridDim.x + blockIdx.x;
+  unsigned long int global_id = block_id * blockDim.x + threadIdx.x;
+
+  A[global_id] = (A[global_id] - B[global_id]) * 
+                  (A[global_id] - B[global_id]);
+}
+\end{lstlisting}
+
+Este kernel realiza la operación $a_{ij} = (a_{ij} - b_{ij})²$ pero tratando a las matrices como arreglos.Esta parte del algoritmo es coalescente en cuanto a los accesos, ya que dos threads con ids consecutivos accederán primero a la posición $a[id]$ las cuales son consecutivas y luego a la posición $b[id]$, también consecutivas. Tenemos razones para pensar que es la mejor manera de hacer esta primera parte.
+
+Una vez realizadas las diferencias parciales entre los elementos de las matrices, los cuales quedan almacenadas en las posiciones correspondientes de la matriz $A$, solo resta hacer la suma de todos estos elementos y la división por $N²$.
+
+Para encarar esta segunda parte, es que utilizamos dos aproximaciones descriptas a continuación. 
+
+\section{Versión en GPU no optimizada}
+La versión no optimizada utiliza el algoritmo de las sumas logarítmico para sumar todos los elementos de la matriz $A$. Tiene importantes restricciones en cuanto a la cantidad de elementos que debe tener $A$ para que el resultado sea correcto. El algoritmo suma todos los elementos de $A$ en $log_2(N*N)$ pasadas. En una primera iteración se crean $NxN$ threads. Cada thread con id $x$ hace $a_x = a_x + a_{x+offset}$, donde \textit{offset} es $2^{\#pasada}$. Luego de $log_2(N*N)$ pasadas, el resultado queda guardado en en la posición $a_0$ de la matriz.
+El kernel utilizado es como el que sigue:
+
+\begin{lstlisting}[frame=single]
+__global__ void kernel_op_2(data_t *M, const unsigned int offset) {
+  unsigned long int block_id =  blockIdx.y * gridDim.x + blockIdx.x;
+  unsigned long int global_id = block_id * blockDim.x + threadIdx.x;
+
+  M[global_id] += M[global_id + offset];
+}
+\end{lstlisting}
+
+Notar que las sumas intermedias se realizan, es decir todos los $NxN$ threads trabajan, pero los resultados se descartan. Esto evita que los threads diverjan, pero puede dar violación de segmento si un thread trata de acceder a una posición inexistente. ESTO HAY QUE ARREGLARLO!!!!
+
+\section{Versión en GPU optimizada}
+Para la versión optimizada bajamos la granularidad de la solución. En lugar de crear un thread por cada posición a sumar, creamos un thread por columna. Para una matriz de $NxN$, habrá $N$ threads, cada uno de los cuales sumará en una arreglo $C$ temporal los valores de cada columna de la matriz. Luego, la suma de los parciales $C$ se realiza en la CPU en doble presición. 
+
+Este algoritmo mejora respecto a la versión anterior en que los accesos a la memoria son coalescentes. Cada thread con id $i$, accede a las posiciones de los elementos de $a_{xi}$ y a $c_i$. Además, como los elementos de $c_i$ son accedidos con mucha frecuencia, los mecanismos de cache de la memoria garantizan el acceso eficiente. Más aún, como cada thread accede a solo al $c_i$ de su id, no existen conflictos de acceso a bancos. Probablemente debido a esto es que no notamos diferencias entre la versión optimizada con $C$ global y la versión optimizada con $C$ shared.
+
+El kernel que suma por filas es como sigue:
+
+\begin{lstlisting}[frame=single]
+__global__ void kernel_op_2(data_t *M, data_t *C, const unsigned int N)
+{
+    unsigned long int block_id = blockIdx.y *
+                         gridDim.x + blockIdx.x;
+    unsigned long int global_id = block_id * 
+                        blockDim.x + threadIdx.x;
+    unsigned int i;
+    C[global_id] = 0;
+    for (i = 0; i < N; i++)
+        C[global_id] += M[global_id + (N * i)];
+}
+\end{lstlisting}
+
+
+\section{Resultados}
+\begin{center}
+\begin{tabular}{lllll}
+× & secuencial & no optimizado & optimizado & opt + shared\\
+allocación & × & × & × & ×\\
+× & × & × & × & ×
+\end{tabular}
+\end{center}
+
+
+CAMBIAR LAS REFERENCIAS!!!
+\begin{thebibliography}{99}
+\bibitem{QHY5T} QHY5 Series - \url{http://qhyccd.com/en/left/page3/qhy5-series/}
+\bibitem{QHYCCD} QHYCCD Astronomy CCD/CMOS Camera - \url{qhyccd.com}
+\bibitem{SBIG} SBIG Cameras - \url{http://www.sbig.com/products/cameras/}
+\bibitem{APOGEE} Apogee Imaging Systems - \url{http://www.ccd.com/}
+\bibitem{ORION} Orion Astrophotography Cameras\\ \url{http://www.telescope.com/Astrophotography/Astrophotography-Cameras/pc/4/58.uts}
+\bibitem{MT9T001} MT9T001 - 1/2-Inch 3.1MP Digital Image Sensor Datasheet, Rev D (07/2005)
+\bibitem{MT9M001} MT9M001 - 1/2-Inch 1.2MP Digital Image Sensor, Rev F (05/2006)
+\bibitem{CYPRESS} CY7C68013A High-Speed USB Peripheral Controller Datasheet, Rev V (02/2012)
+\bibitem{MANUAL1} Instructions Manual - Telescopes with HEQ5 \& EQ6 Mount, SkyWatcher
+\bibitem{MANUAL2} Instructions Manual - SynScan for HEQ5 \& EQ6 Mount, SkyWatcher 
+\bibitem{DRIFT} Simple Telescope Drift Align Method - \url{http://www.astro.shoregalaxy.com/drift-align.htm}
+\bibitem{LINGUIDER} lin\_guder \@ sourceforge.net - \url{http://sourceforge.net/projects/linguider/}
+\end{thebibliography}
+
+
+\end{document}
