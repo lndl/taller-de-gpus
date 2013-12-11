@@ -28,9 +28,9 @@ run_GPU(data_t* host_A, data_t* host_B, const unsigned int N, const unsigned int
 
   // Aloca memoria en GPU
   t[6] = tick();
-  cudaMalloc((void**)&gpu_A, n_bytes);
-  cudaMalloc((void**)&gpu_B, n_bytes);
-  cudaMalloc((void**)&gpu_C, n_bytes/N);
+  if (cudaSuccess != cudaMalloc((void**)&gpu_A, n_bytes))   printf("ERROR: INSUFICIENTE MEM EN LA GPU\n");
+  if (cudaSuccess != cudaMalloc((void**)&gpu_B, n_bytes))   printf("ERROR: INSUFICIENTE MEM EN LA GPU\n");
+  if (cudaSuccess != cudaMalloc((void**)&gpu_C, n_bytes/N)) printf("ERROR: INSUFICIENTE MEM EN LA GPU\n");
   t[6] = tick() - t[6];
 
   // Copia los datos desde el host a la GPU
@@ -77,7 +77,7 @@ run_GPU(data_t* host_A, data_t* host_B, const unsigned int N, const unsigned int
 __global__ void kernel_op_1(data_t *A, data_t *B) {
   unsigned long int block_id =  blockIdx.y * gridDim.x + blockIdx.x;
   unsigned long int global_id = block_id * blockDim.x + threadIdx.x;
-
+  
   A[global_id] = (A[global_id] - B[global_id]) * (A[global_id] - B[global_id]);
 }
 

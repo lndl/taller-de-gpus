@@ -14,28 +14,25 @@ double MSE(data_t *a, data_t *b, const unsigned int n) {
 	return total;
 }
 
-int main(int argc, char *argv[]){
-	int * a, * b;
-	double t[10], resultado;
-	const unsigned int N  = (argc >= 2) ? atoi(argv[1]) : 8;
-	const unsigned int k1 = (argc >= 3) ? atoi(argv[2]) : 7;
-	const unsigned int k2 = (argc >= 4) ? atoi(argv[3]) : 9;
-
+double cpu_exec(unsigned int n, unsigned int k1, unsigned int k2, double* t){
+	data_t * a, * b;
+	double resultado;
+	
 	t[0] = tick();
 	
 	t[1] = tick();
-	a = malloc(N*N*sizeof(data_t));
-	b = malloc(N*N*sizeof(data_t));
+	a = malloc(n*n*sizeof(data_t));
+	b = malloc(n*n*sizeof(data_t));
 	t[1] = tick() - t[1];
 	
 	t[2] = tick();
-	init_matrix(a, N, 0, k1);
-	init_matrix(b, N, 1, k2);
+	init_matrix(a, n, 0, k1);
+	init_matrix(b, n, 1, k2);
 	t[2] = tick() - t[2];
 	
 	
 	t[3] = tick();
-	resultado = MSE(a,b,N);
+	resultado = MSE(a,b,n);
 	t[3] = tick() - t[3];
 	
 	
@@ -46,7 +43,27 @@ int main(int argc, char *argv[]){
 	
 	t[0] = tick() - t[0];
 	
-	informar(t, resultado, N, k1, k2);
-	
-	return 0;
+	return resultado;
+}
+
+int main(int argc, char** argv)
+{
+  const unsigned int n      = (argc >= 2) ? atoi(argv[1]) : 8;
+  const unsigned int count  = (argc >= 3) ? atoi(argv[2]) : 1;
+  const unsigned int k1     = (argc >= 4) ? atoi(argv[3]) : 7;
+  const unsigned int k2     = (argc >= 5) ? atoi(argv[4]) : 9;
+  unsigned int i;
+  double t_acc[10], resultado;
+
+  array_init(t_acc, 10, 0);
+  for(i=0; i<count; i++)
+  {
+    double t[10];
+    array_init(t, 10, -1);
+    resultado = cpu_exec(n,k1,k2,t);
+    array_acc(t_acc, t, 10);
+  }
+  informar(t_acc, resultado, n, k1, k2);
+
+  return 0;
 }

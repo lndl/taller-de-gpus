@@ -28,8 +28,8 @@ run_GPU(data_t* host_A, data_t* host_B, const unsigned int N, const unsigned int
 
   // Aloca memoria en GPU
   t[6] = tick();
-  cudaMalloc((void**)&gpu_A, n_bytes);
-  cudaMalloc((void**)&gpu_B, n_bytes);
+  if (cudaSuccess != cudaMalloc((void**)&gpu_A, n_bytes)) printf("ERROR: INSUFICIENTE MEM EN LA GPU\n");
+  if (cudaSuccess != cudaMalloc((void**)&gpu_B, n_bytes)) printf("ERROR: INSUFICIENTE MEM EN LA GPU\n");
   t[6] = tick() - t[6];
   
 
@@ -69,16 +69,16 @@ run_GPU(data_t* host_A, data_t* host_B, const unsigned int N, const unsigned int
 
 // Los kernels que ejecutaran por cada hilo de la GPU
 __global__ void kernel_op_1(data_t *A, data_t *B) {
-  unsigned long int block_id =  blockIdx.y * gridDim.x + blockIdx.x;
+  unsigned long int block_id  = blockIdx.y * gridDim.x + blockIdx.x;
   unsigned long int global_id = block_id * blockDim.x + threadIdx.x;
 
   A[global_id] = (A[global_id] - B[global_id]) * (A[global_id] - B[global_id]);
 }
 
 __global__ void kernel_op_2(data_t *M, const unsigned int offset, const unsigned int limit) {
-  unsigned long int block_id =  blockIdx.y * gridDim.x + blockIdx.x;
+  unsigned long int block_id  = blockIdx.y * gridDim.x + blockIdx.x;
   unsigned long int global_id = block_id * blockDim.x + threadIdx.x;
 
-  if (global_id + offset <= limit)
+  if ((global_id + offset) <= limit && (global_id % (2*offset)) == 0)
     M[global_id] += M[global_id + offset]; 
 }

@@ -9,6 +9,8 @@ typedef int data_t;
 
 // Para medir los tiempos
 double tick();
+void array_init(double* a, int n, double k);
+void array_acc(double* acc, double* b, int n);
 // Funcion para la inicializacion de las matrices
 void init_matrix(data_t *M, const unsigned int size, int orientation, int k );
 // Verificacion de resultados
